@@ -67,22 +67,19 @@ _PSRAM_PINS: Dict[str, Set[int]] = {
     "esp32c6": set(),   # No PSRAM support
 }
 
-# Pins claimed by an OCTAL flash/PSRAM interface. At chip level GPIO33-37 carry
-# SPIIO4..SPIIO7 and SPIDQS (ESP32-S3 datasheet 2.3.5), but which ones a board
-# actually loses depends on what is octal:
+# Pins claimed by an OCTAL flash/PSRAM interface. ESP32-S3 datasheet 2.3.5:
+# "GPIO33, GPIO34, GPIO35, GPIO36, GPIO37: The higher 4 bits data line interface
+# and DQS", i.e. SPIIO4 (33), SPIIO5 (34), SPIIO6 (35), SPIIO7 (36), SPIDQS (37).
+# An 8-line memory needs all four upper data lines plus DQS, so octal PSRAM alone
+# consumes the whole group - matching the ESP-IDF rule "When using Octal flash or
+# Octal PSRAM or both, GPIO33 ~ GPIO37 are connected to SPIIO4 ~ SPIIO7 and
+# SPIDQS".
 #
-#   * in-package OCTAL PSRAM (ESP32-S3R8/R16V) claims GPIO35, GPIO36, GPIO37 -
-#     ESP32-S3-WROOM-1/1U datasheet, pin table footnote b: "pins IO35, IO36,
-#     and IO37 are connected to the Octal SPI PSRAM and are not available for
-#     other use";
-#   * GPIO33/GPIO34 are only taken when the FLASH is octal too. Espressif
-#     modules pair octal PSRAM with quad flash, and WROOM-1/1U does not even
-#     bond GPIO33/34 out - see _NON_EXPOSED_PINS_S3.
+# The ESP32-S3-WROOM-1/1U footnote names only IO35/36/37 because IO33/IO34 are
+# not bonded out on that module at all (see _NON_EXPOSED_PINS_S3), not because
+# octal PSRAM leaves SPIIO4/SPIIO5 free on the die.
 _OCTAL_PSRAM_PINS: Dict[str, Set[int]] = {
-    "esp32s3": {35, 36, 37},
-}
-_OCTAL_FLASH_PINS: Dict[str, Set[int]] = {
-    "esp32s3": {33, 34},
+    "esp32s3": {33, 34, 35, 36, 37},
 }
 
 # Pins absent from a module's pin-out even though the die has them.
@@ -281,13 +278,9 @@ class Esp32Platform(Platform):
         """Pins wired to in-package octal PSRAM on this variant."""
         return _OCTAL_PSRAM_PINS.get(self.variant, set())
 
-    def _get_octal_flash_pins(self) -> Set[int]:
-        """Pins added to the memory bus only when the flash is octal as well."""
-        return _OCTAL_FLASH_PINS.get(self.variant, set())
-
     def _get_octal_mem_pins(self) -> Set[int]:
         """Every pin the octal memory bus can claim on this variant."""
-        return self._get_octal_psram_pins() | self._get_octal_flash_pins()
+        return self._get_octal_psram_pins()
 
     def _octal_mem_reserved(self) -> bool:
         """True when this board is known to use an octal flash/PSRAM bus."""
@@ -428,15 +421,11 @@ class Esp32Platform(Platform):
         # Octal PSRAM pins - reserved on octal boards, risky elsewhere
         if gpio_num in self._get_octal_psram_pins():
             if self._octal_mem_reserved():
-                return ("reserved", "In-package octal PSRAM (SPIIO6, SPIIO7, SPIDQS)")
+                return ("reserved", "Octal flash/PSRAM bus (SPIIO4-SPIIO7, SPIDQS)")
             if self._octal_mem_uncertain():
                 return ("restricted",
                         "Wired to in-package octal PSRAM on R8/R16 parts "
                         "(e.g. N16R8) - verify the module before using")
-        if gpio_num in self._get_octal_flash_pins():
-            return ("restricted",
-                    "SPIIO4/SPIIO5 - taken only when the flash is octal; not "
-                    "bonded out on WROOM-1/1U modules")
 
         # Input-only pins - restricted (limited capability)
         input_only_pins = self._get_input_only_pins()
@@ -790,15 +779,18 @@ class Esp32Platform(Platform):
 
         # Memory bus mode: explicit "psram" field wins, else parse the module
         # suffix. Octal flash/PSRAM claims five extra pins on ESP32-S3.
-        psram_mode = self._resolve_psram_mode(module or "", assignment.get("psram"))
+        # Memory mode, in priority order: the assignment's own "psram" field, the
+        # mode this platform was constructed with when the assignment does not
+        # override the module, and finally whatever the module name implies.
+        # Ignoring self.psram here would downgrade a known-octal board to
+        # "unknown" - i.e. to warnings - merely because the JSON omitted a field.
+        psram_field = assignment.get("psram")
+        if psram_field is None and (module or "") == (self.module or ""):
+            psram_mode = self.psram
+        else:
+            psram_mode = self._resolve_psram_mode(module or "", psram_field)
         flash_mode = str(assignment.get("flash") or "").strip().lower()
         octal_psram_pins = self._get_octal_psram_pins()
-        octal_flash_pins = self._get_octal_flash_pins()
-        # An octal flash drives the same bus: it claims SPIIO4..SPIIO7 and
-        # SPIDQS, so every one of GPIO33-37 becomes unavailable.
-        if flash_mode == "octal":
-            octal_psram_pins = octal_psram_pins | octal_flash_pins
-            octal_flash_pins = set()
         octal_reserved = bool(octal_psram_pins) and (
             psram_mode == "octal" or flash_mode == "octal")
         octal_uncertain = bool(octal_psram_pins) and psram_mode == "unknown"
@@ -1021,16 +1013,16 @@ class Esp32Platform(Platform):
                     "severity": "error"
                 })
 
-            # Check 6b: in-package OCTAL PSRAM pins (S3 R8/R16 parts)
+            # Check 6b: OCTAL flash/PSRAM bus pins (S3 R8/R16 parts)
             if gpio in octal_psram_pins:
                 if octal_reserved:
                     errors.append({
                         "gpio": gpio,
                         "code": ConflictType.PSRAM_PIN.value,
-                        "message": f"GPIO{gpio} is wired to the in-package octal PSRAM "
-                                   f"(SPIIO6, SPIIO7, SPIDQS) on {self.variant}. "
-                                   f"Assigning it breaks boot on modules such as "
-                                   f"ESP32-S3-WROOM-1-N16R8.",
+                        "message": f"GPIO{gpio} belongs to the octal flash/PSRAM bus "
+                                   f"(SPIIO4-SPIIO7, SPIDQS) on {self.variant}. "
+                                   f"Assigning it breaks boot on parts such as "
+                                   f"ESP32-S3R8 / ESP32-S3-WROOM-1-N16R8.",
                         "severity": "error"
                     })
                     continue
@@ -1038,23 +1030,12 @@ class Esp32Platform(Platform):
                     warnings.append({
                         "gpio": gpio,
                         "code": ConflictType.PSRAM_PIN.value,
-                        "message": f"GPIO{gpio} is wired to in-package octal PSRAM on R8/R16 "
+                        "message": f"GPIO{gpio} belongs to the octal flash/PSRAM bus on R8/R16 "
                                    f"parts (e.g. ESP32-S3-WROOM-1-N16R8). Set "
                                    f"\"psram\" to \"octal\" or \"quad\"/\"none\" in the input, "
                                    f"or name the module, to get a definite answer.",
                         "severity": "warning"
                     })
-
-            # Check 6c: SPIIO4/SPIIO5 - only an octal *flash* takes these
-            if gpio in octal_flash_pins:
-                warnings.append({
-                    "gpio": gpio,
-                    "code": ConflictType.PSRAM_PIN.value,
-                    "message": f"GPIO{gpio} carries SPIIO4/SPIIO5 and is only free when the "
-                               f"flash is quad SPI (the usual case on Espressif modules). "
-                               f"It is not bonded out on ESP32-S3-WROOM-1/1U at all.",
-                    "severity": "warning"
-                })
 
             # Check 6d: 1.8 V SPICLK_N/P pins on "V" parts
             if gpio in low_voltage_clk_pins:

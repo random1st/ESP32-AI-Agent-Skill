@@ -61,7 +61,7 @@ python scripts/validate_pinmap.py --format text tests/fixtures/board_pregmate_ma
 # Generate init code
 python scripts/generate_config.py pinmap.json --framework espidf   # or arduino
 
-# Regression suite (69 tests)
+# Regression suite (75 tests)
 python -m pytest -q
 ```
 
@@ -84,7 +84,8 @@ Input format:
 `module` and `psram` are what make S2/S3 answers correct. `psram` wins when given;
 otherwise the module's memory suffix decides (`N16R8` → octal, `N8R2` → quad,
 `N8` → none). With neither, the validator stays undecided and warns about the
-octal-PSRAM pins instead of silently approving them.
+octal-memory pins instead of silently approving them. An optional
+`"flash": "octal"` reserves the same group when only the flash is octal.
 
 ## Datasheet corpus
 
@@ -119,7 +120,7 @@ Chip-gated, because the classic ESP32 rules are wrong on newer variants:
 | Check | What it catches |
 |---|---|
 | **Flash pins** | GPIO6-11 (ESP32), 12-17 (C3), 24-29 (C6), 26-32 (S2/S3) |
-| **Octal PSRAM pins** | GPIO35/36/37 on ESP32-S3 R8/R16 parts — a boot failure, not a warning |
+| **Octal flash/PSRAM pins** | GPIO33-37 on ESP32-S3 R8/R16 parts (SPIIO4-SPIIO7 + SPIDQS) — a boot failure, not a warning |
 | **Non-existent GPIOs** | GPIO22-25 on S2/S3, GPIO24/28-31 on ESP32 |
 | **Pins absent on the module** | GPIO33/34 on ESP32-S3-WROOM-1/1U, GPIO20/24/28-31/37/38 on WROOM-32 |
 | **Input-only pins** | GPIO34-39 on ESP32, GPIO46 on S2 — and explicitly *not* on S3, which has none |

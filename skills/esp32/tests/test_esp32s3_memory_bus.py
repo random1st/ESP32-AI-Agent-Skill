@@ -18,10 +18,11 @@ import json
 from platforms import ConflictType, get_platform
 
 
-# In-package octal PSRAM takes SPIIO6/SPIIO7/SPIDQS; GPIO33/34 (SPIIO4/5) are
-# only claimed by an octal *flash* and are not bonded out on WROOM-1 at all.
-OCTAL_PSRAM_PINS = [35, 36, 37]
-OCTAL_FLASH_PINS = [33, 34]
+# An 8-line memory needs SPIIO4..SPIIO7 plus SPIDQS, so octal PSRAM claims the
+# whole GPIO33-37 group (ESP32-S3 datasheet 2.3.5). The WROOM-1 footnote lists
+# only 35/36/37 because that module does not bond GPIO33/34 out at all.
+OCTAL_PSRAM_PINS = [33, 34, 35, 36, 37]
+MODULE_UNBONDED_PINS = [33, 34]
 
 
 def _assignment(pins, **kwargs):
@@ -80,10 +81,15 @@ class TestSiliconHoles:
 
 class TestOctalMemoryBus:
     def test_octal_module_reserves_psram_pins(self):
+        """On WROOM-1 the bonded half of the group reports as a PSRAM pin.
+
+        GPIO33/34 are rejected earlier, as pins the module never brings out —
+        see test_wroom1_does_not_bond_gpio33_34.
+        """
         platform = get_platform("esp32", variant="esp32s3",
                                 module="ESP32-S3-WROOM-1-N16R8")
         assert platform.psram == "octal"
-        for gpio in OCTAL_PSRAM_PINS:
+        for gpio in (35, 36, 37):
             result = platform.validate(_assignment(
                 [{"gpio": gpio, "function": "SENSOR_EN", "direction": "output"}],
                 module="ESP32-S3-WROOM-1-N16R8",
@@ -95,7 +101,7 @@ class TestOctalMemoryBus:
         """WROOM-1/1U pin table: the module brings out GPIO35-48, never 33/34."""
         platform = get_platform("esp32", variant="esp32s3",
                                 module="ESP32-S3-WROOM-1-N16R8")
-        for gpio in OCTAL_FLASH_PINS:
+        for gpio in MODULE_UNBONDED_PINS:
             result = platform.validate(_assignment(
                 [{"gpio": gpio, "function": "SENSOR_EN", "direction": "output"}],
                 module="ESP32-S3-WROOM-1-N16R8",
@@ -103,16 +109,28 @@ class TestOctalMemoryBus:
             assert not result.valid
             assert ConflictType.RESERVED_PIN.value in _codes(result.errors)
 
-    def test_bare_chip_warns_on_spiio4_5_instead_of_failing(self):
-        """On a bare S3 die GPIO33/34 are usable unless the flash is octal."""
+    def test_bare_octal_chip_rejects_spiio4_5_too(self):
+        """GPIO33/34 are SPIIO4/SPIIO5 — an 8-line PSRAM needs them as well."""
         platform = get_platform("esp32", variant="esp32s3",
                                 module="ESP32-S3R8", psram="octal")
-        result = platform.validate(_assignment(
-            [{"gpio": 33, "function": "SENSOR_EN", "direction": "output"}],
-            module="ESP32-S3R8", psram="octal",
-        ))
-        assert result.valid, result.errors
-        assert ConflictType.PSRAM_PIN.value in _codes(result.warnings)
+        for gpio in (33, 34):
+            result = platform.validate(_assignment(
+                [{"gpio": gpio, "function": "SENSOR_EN", "direction": "output"}],
+                module="ESP32-S3R8", psram="octal",
+            ))
+            assert not result.valid, f"GPIO{gpio} must be rejected on an octal part"
+            assert ConflictType.PSRAM_PIN.value in _codes(result.errors)
+
+    def test_constructor_psram_survives_an_assignment_without_it(self):
+        """Omitting "psram" in the JSON must not downgrade a known board."""
+        platform = get_platform("esp32", variant="esp32s3",
+                                module="ESP32-S3R8", psram="octal")
+        result = platform.validate({
+            "platform": "esp32", "variant": "esp32s3", "module": "ESP32-S3R8",
+            "pins": [{"gpio": 35, "function": "SENSOR_EN", "direction": "output"}],
+        })
+        assert not result.valid, result.warnings
+        assert ConflictType.PSRAM_PIN.value in _codes(result.errors)
 
     def test_v_part_flags_1v8_spi_clock_pins(self):
         """GPIO47/48 swing 1.8 V on R8V/R16V parts — the Pregmate panel uses both."""

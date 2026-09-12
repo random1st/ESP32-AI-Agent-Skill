@@ -10,20 +10,23 @@ reference and `esp_psram` Kconfig. Full text: `datasheets` skill.
 | Interface | Pins | When |
 |---|---|---|
 | SPI0/1 (flash + quad PSRAM) | GPIO26-32 | always on a module with in-package flash |
-| SPIIO4 / SPIIO5 | GPIO33, GPIO34 | only when the **flash** is octal |
-| SPIIO6 / SPIIO7 / SPIDQS | GPIO35, GPIO36, GPIO37 | whenever **octal PSRAM** is present |
+| SPIIO4, SPIIO5, SPIIO6, SPIIO7, SPIDQS | GPIO33, GPIO34, GPIO35, GPIO36, GPIO37 | whenever **any** octal memory is present — PSRAM, flash, or both |
 
-The chip-level statement — "When using Octal flash or Octal PSRAM or both,
-GPIO33 ~ GPIO37 are connected to SPIIO4 ~ SPIIO7 and SPIDQS" — covers both rows.
-The module datasheet is narrower and more useful in practice: on
-ESP32-S3-WROOM-1/1U, "for modules with Octal SPI PSRAM, i.e. modules embedded
-with ESP32-S3R8 or ESP32-S3R16V, pins IO35, IO36, and IO37 are connected to the
-Octal SPI PSRAM and are not available for other use". GPIO33/34 are not brought
-out on that module at all, because its flash is quad SPI.
+The datasheet names the group "the higher 4 bits data line interface and DQS",
+and ESP-IDF states it directly: "When using Octal flash or Octal PSRAM or both,
+GPIO33 ~ GPIO37 are connected to SPIIO4 ~ SPIIO7 and SPIDQS". An 8-line memory
+needs all four upper data lines plus the strobe, so **octal PSRAM on its own
+consumes all five pins** — do not read SPIIO4/SPIIO5 as flash-only.
+
+The ESP32-S3-WROOM-1/1U footnote mentions only three of them — "for modules with
+Octal SPI PSRAM, i.e. modules embedded with ESP32-S3R8 or ESP32-S3R16V, pins
+IO35, IO36, and IO37 are connected to the Octal SPI PSRAM and are not available
+for other use" — because that module does not bond GPIO33/34 out at all, not
+because those two stay free on the die.
 
 Practical rule for an octal-PSRAM module (N16R8, N8R8, N4R8, N16R16V):
-**35/36/37 are gone, 33/34 do not exist on the pad, 26-32 are flash.** What is
-left for the application is GPIO0-21 and GPIO38-48.
+**33-37 are gone (33/34 not even on a pad), 26-32 are flash.** What is left for
+the application is GPIO0-21 and GPIO38-48.
 
 ## 2. Module part numbers
 

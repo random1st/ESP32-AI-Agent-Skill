@@ -97,14 +97,14 @@ given, otherwise the memory suffix of the module name decides (`N16R8` → octal
 `N8R2` → quad, `N8` → none). With neither, the validator stays undecided and
 **warns** about the octal-PSRAM pins instead of silently approving them. Pass
 `wifi_enabled: true` only when Wi-Fi is actually used — it gates the ADC2 check.
-`flash` is optional and quad unless stated; `"octal"` extends the reserved set to
-all of GPIO33-37, since an octal flash drives SPIIO4/SPIIO5 as well.
+`flash` is optional and quad unless stated; `"octal"` reserves GPIO33-37 even
+when the PSRAM is not octal, since an octal flash drives the same bus.
 Validation and code generation cover esp32, esp32s2, esp32s3, esp32c3 and
 esp32c6; the remaining variants are reference-only.
 
 ## 4. What the validator catches
 
-Errors: flash-pin use, in-package octal-PSRAM pins (GPIO35-37 on S3 R8/R16
+Errors: flash-pin use, octal flash/PSRAM bus pins (GPIO33-37 on S3 R8/R16
 parts), pins absent from the silicon (GPIO22-25 on S2/S3, 24/28-31 on ESP32),
 pins not bonded out on the module (GPIO33/34 on WROOM-1), duplicate assignment,
 output on an input-only pin, ADC2 with Wi-Fi, total GPIO current over 200 mA.

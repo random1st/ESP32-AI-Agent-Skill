@@ -72,10 +72,10 @@ R8V/R16V** — with a 1.8 V driver the two blue bits sit near the panel's input
 threshold. Check with `esptool.py flash_id` / the module marking, not from
 `sdkconfig`, which cannot tell the two apart.
 
-**GPIO33-37 are never available for expansion.** In-package octal PSRAM takes
-GPIO35/36/37 (SPIIO6, SPIIO7, SPIDQS), and WROOM-1/1U does not bond GPIO33/34
-out at all. The validator enforces both, so a future sensor cannot be parked
-there by accident.
+**GPIO33-37 are never available for expansion.** The octal PSRAM bus takes the
+whole group — SPIIO4 through SPIIO7 plus SPIDQS — and WROOM-1/1U does not bond
+GPIO33/34 out in the first place. The validator enforces both, so a future sensor
+cannot be parked there by accident.
 
 **`sdkconfig` and `sdkconfig.defaults` disagree on flash size.** The committed
 `sdkconfig` says `CONFIG_ESPTOOLPY_FLASHSIZE_8MB`, the defaults file says 16 MB.
