@@ -1,0 +1,77 @@
+---
+source: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
+document: ESP32-S3 Series Datasheet
+vendor: Espressif Systems
+section: "2.1 Pin Layout"
+pdf_pages: 15
+retrieved: 2026-09-12
+redistribute: false
+---
+
+# 2.1 Pin Layout
+
+```text
+2 Pins
+
+
+
+2 Pins
+
+2.1 Pin Layout
+
+
+
+
+                                                                                                                                                                    46 VDD3P3_CPU
+                           56 VDDA     55 VDDA     54 XTAL_P   53 XTAL_N   52 GPIO46   51 GPIO45       50 U0RXD             49 U0TXD        48 MTMS     47 MTDI                     45 MTDO     44 MTCK     43 GPIO38
+
+
+
+              LNA_IN   1                                                                                                                                                                                                42 GPIO37
+
+             VDD3P3    2                                                                                                                                                                                                41 GPIO36
+
+             VDD3P3    3                                                                                                                                                                                                40 GPIO35
+
+             CHIP_PU   4                                                                                                                                                                                                39 GPIO34
+
+               GPIO0   5                                                                                                                                                                                                38 GPIO33
+
+               GPIO1   6                                                                                                                                                                                                37 SPICLK_P
+
+               GPIO2   7                                                                                                                                                                                                36 SPICLK_N
+
+               GPIO3   8                                                                                                                                                                                                35 SPID
+
+               GPIO4   9
+                                                                                  ESP32-S3                                                                                                                              34 SPIQ
+
+               GPIO5 10                                                                                                                                                                                                 33 SPICLK
+
+               GPIO6 11                                                                                                                                                                                                 32 SPICS0
+
+               GPIO7 12                                                                                                                                                                                                 31 SPIWP
+
+               GPIO8 13                                                                                                                                                                    57 GND                       30 SPIHD
+
+               GPIO9 14                                                                                                                                                                                                 29 VDD_SPI
+
+
+
+
+                           GPIO10 15   GPIO11 16   GPIO12 17   GPIO13 18   GPIO14 19
+
+                                                                                       VDD3P3_RTC 20   XTAL_32K_P 21        XTAL_32K_N 22
+                                                                                                                                            GPIO17 23   GPIO18 24   GPIO19 25       GPIO20 26   GPIO21 27   SPICS1 28
+
+
+
+
+                                               Figure 2-1. ESP32-S3 Pin Layout (Top View)
+
+
+
+
+Espressif Systems                                                                                                      15                                                                       ESP32-S3 Series Datasheet v2.2
+                                                                 Submit Documentation Feedback
+```

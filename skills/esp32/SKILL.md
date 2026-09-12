@@ -1,134 +1,131 @@
 ---
 name: esp32
-description: Expert Embedded Systems guidance for ESP32 hardware, ESP-IDF firmware, and PlatformIO projects. Use for chip selection (S3, C3, C6, etc.), memory management (MMU, PSRAM), safety validations (GPIO12 trap), and highly optimized C/C++ firmware development. Use when user mentions ESP32, ESP-IDF, PlatformIO, embedded systems with Espressif chips, GPIO configuration, LVGL displays, or Waveshare boards.
-version: 1.0.0
+description: Expert ESP32 firmware and hardware guidance — chip selection (S3, C3, C6, S2, ...), GPIO pin-map validation with anti-bricking checks, memory/PSRAM layout, ESP-IDF 5.x and PlatformIO tooling, and Arduino/ESP-IDF init code generation. Use when the user mentions ESP32, ESP-IDF, idf.py, PlatformIO, GPIO assignment, strapping pins, PSRAM, or embedded C/C++ for Espressif chips.
 ---
 
-# ESP32 Master Embedded Engineering Agent
+# ESP32 Embedded Engineering
 
-You are an expert-level Embedded Systems AI Agent specializing exclusively in the Espressif ESP32 hardware ecosystem, ESP-IDF tooling, and PlatformIO environments. Your objective is to guide developers, write highly optimized C/C++ firmware, and actively prevent hardware damage or protocol conflicts through strict safety validations.
+Expert-level guidance for the Espressif ESP32 family: ESP-IDF and PlatformIO
+firmware, pin assignment, and hardware safety. Companion skills:
 
-## 1. Reference Loading
-
-ALWAYS load the platform pin database. Load other files only when their trigger condition is met. All paths are relative to this plugin's root directory.
-
-| File | Trigger |
+| Need | Skill |
 |---|---|
-| `references/platforms/esp32-pins.md` | Always (Core GPIO reference) |
-| `references/platforms/esp32-specifics.md` | Any of: strapping pins, deep sleep, flash/PSRAM, ADC2, boot issues, architecture selection, memory allocation |
-| `references/protocol-quick-ref.md` | Any protocol mentioned: I2C, SPI, UART, PWM, 1-Wire, CAN, ADC, DAC |
-| `references/electrical-constraints.md` | Current limits, voltage levels, pull-ups/pull-downs, power supply mentioned |
-| `references/common-devices.md` | Specific sensor, module, display, or breakout board mentioned |
-| `references/esp32/specs.md` | Original ESP32 variant specifics |
-| `references/esp32-s2/specs.md` | ESP32-S2 variant specifics |
-| `references/esp32-s3/specs.md` | ESP32-S3 variant specifics |
-| `references/esp32-c3/specs.md` | ESP32-C3 variant specifics |
-| `references/esp32-c6/specs.md` | ESP32-C6 variant specifics |
-| `references/esp32-h2/specs.md` | ESP32-H2 variant specifics |
-| `references/esp32-p4/specs.md` | ESP32-P4 variant specifics |
-| `references/lvgl/README.md` | LVGL, display GUI, or UI framework mentioned — then load the version-specific folder |
-| `references/waveshare/README.md` | Waveshare board or display mentioned — then load the specific board/display file |
+| LVGL GUI code, widgets, migrations | `lvgl` |
+| Panels, touch controllers, bus choice, tearing | `display-panels` |
+| Board pinouts (Waveshare, Pregmate MAIN A1) | `hardware-boards` |
+| Wiring, electrical limits, sensors, bus protocols | `electronics` |
+| Datasheet / TRM lookup by section | `datasheets` |
 
-## 2. Hardware Architecture & Chip Families
+## 1. Non-negotiables
 
-When advising on hardware selection, apply the following matrix:
+**Never state a pin fact from memory.** Every GPIO claim is variant-specific and
+the failure mode is a dead board. Load the reference, or run the validator.
 
-* **ESP32 (Original):** Legacy projects requiring Bluetooth Classic.
-* **ESP32-S2:** Ultra-low power and USB OTG/HID.
-* **ESP32-S3:** Performance, AI/ML (Vector instructions), complex GUIs.
-* **ESP32-C3:** Standard budget IoT node (RISC-V).
-* **ESP32-C6:** Next-gen Matter/mesh nodes, Wi-Fi 6, Zigbee/Thread.
-* **ESP32-H2:** Hub/Home (No Wi-Fi), Zigbee/Thread/BLE.
-* **ESP32-P4:** Multimedia Powerhouse (No Wireless), H.264, Dual MIPI.
+**Chip-gate every safety rule.** The classic ESP32 rules are wrong on newer
+variants, and that is the most common source of bad advice:
 
-## 3. Safety & "Anti-Bricking" Guardrails (CRITICAL)
+| Rule | Applies to | Does NOT apply to |
+|---|---|---|
+| GPIO12 MTDI sets flash voltage to 1.8 V → brick risk | original ESP32 | S2, S3, C3, C6 (on S3 GPIO12 is an ordinary IO, used as an RGB data line on real boards) |
+| GPIO34-39 are input-only, no internal pulls | original ESP32 | S3 (no input-only pins at all), C3, C6. On S2 only GPIO46 is input-only |
+| GPIO6-11 are flash pins | original ESP32 | S2/S3 use GPIO26-32, C3 uses 12-17, C6 uses 24-29 |
+| GPIO16/17 reserved for PSRAM | ESP32 WROVER modules | S2/S3 (quad PSRAM shares the flash pins) |
+| VDD_SPI select pin must stay LOW at boot | GPIO12 on ESP32, GPIO45 on S2/S3 | — |
 
-Actively protect hardware from destructive configurations:
+Authority order: ESP-IDF `soc_caps.h` for the silicon → chip datasheet →
+module datasheet → board schematic. Vendor summaries and blog posts lose.
 
-* **GPIO12 Flash Voltage Trap:** MTDI strapping pin. If driven HIGH during boot, it sets flash voltage to 1.8V, potentially bricking 3.3V modules. **Enforce a strict "Do Not Use" or "Pull-Down Only" policy.**
-* **ADC2/Wi-Fi Conflict:** ADC2 cannot be used simultaneously with Wi-Fi on original ESP32/S2/S3.
-* **Input-Only Pins:** GPIOs 34-39 are strictly inputs and lack internal pull resistors.
-* **IOMUX Collision:** Clear initial IOMUX functions using `gpio_func_sel(pin, PIN_FUNC_GPIO)` when remapping.
+## 2. Reference loading
 
-## 4. Memory & Firmware Standards
+All paths are relative to this skill directory.
 
-* **Memory Hierarchy:** DRAM (Data), IRAM (Instructions - must hold ISRs/Flash-write code), RTC Memory (Deep Sleep), PSRAM (External).
-* **Heap Allocation:** Use capabilities-based allocation (`MALLOC_CAP_DMA`, `MALLOC_CAP_SPIRAM`).
-* **Modern C++:** Apply RAII universally. Never use raw `new`/`delete`. Enforce static allocation or smart pointers.
-* **Reliability:** Always include Watchdog Timers (IWDT/TWDT). Implement short ISRs.
+| File | Load when |
+|---|---|
+| `references/platforms/esp32-pins.md` | any GPIO work (original-ESP32-centric pin database) |
+| `references/platforms/esp32-specifics.md` | strapping pins, deep sleep, flash/PSRAM, ADC2, boot failures, memory layout |
+| `references/esp32-s3/specs.md` | ESP32-S3 selected |
+| `references/esp32-s3/gpio-iomux.md` | S3 pin assignment, strapping, reserved pins, drive strength, power domains |
+| `references/esp32-s3/memory-bus.md` | S3 flash/PSRAM bus, octal vs quad, module part numbers, XIP, cache |
+| `references/esp32/specs.md`, `references/esp32-s2/specs.md`, `references/esp32-c3/specs.md`, `references/esp32-c6/specs.md`, `references/esp32-c2/specs.md`, `references/esp32-c5/specs.md`, `references/esp32-h2/specs.md`, `references/esp32-p4/specs.md` | that variant is selected |
 
-## 5. Tooling & CLI
+Protocol wiring, electrical limits and device pinouts moved to the `electronics`
+skill; panel and touch hardware to `display-panels`.
 
-### ESP-IDF (`idf.py`)
-* Use modern hyphenated syntax (v5.0+): `set-target`, `menuconfig`, `build`, `flash`, `monitor`, `erase-flash`.
-* **Project Config:** `set-target esp32s3` clears build and sets MCU.
+## 3. Pin-map workflow
 
-### PlatformIO
-* Manage `platformio.ini` for multi-environment builds.
-* Switch between `espidf` and `arduino` frameworks as requested.
+1. **Parse** the request: variant, module part number (`ESP32-S3-WROOM-1-N16R8`),
+   protocols, framework, whether Wi-Fi is enabled.
+2. **Load** the triggered references; for a known board load the profile from
+   `hardware-boards` instead of inventing pins.
+3. **Assign** pins — the GPIO matrix makes most choices free, so prefer the
+   conventional default and move only to resolve a conflict.
+4. **Validate** before presenting anything:
 
-## 6. Core Workflow
+```bash
+python scripts/validate_pinmap.py --format text pinmap.json
+# exit 0 = valid, 1 = has errors, 2 = bad input
+```
 
-1. **Parse:** Extract MCU variant, module (WROOM/WROVER), protocols, and framework.
-2. **Detect:** Identify potential conflicts (ADC2, Strapping pins, Flash pins).
-3. **Load:** Read triggered references from `references/`.
-4. **Generate:** Assign pins using GPIO Matrix flexibility. Prefer conventional defaults unless conflicts exist.
-5. **Validate:** Invoke `scripts/validate_pinmap.py` to check for electrical and boot-time conflicts.
-6. **Output:** Provide Assignment Table, `sdkconfig` snippets, and Framework-specific Init Code.
+5. **Generate** init code when asked:
 
-## 7. Script Interface
+```bash
+python scripts/generate_config.py --framework espidf pinmap.json   # or --framework arduino
+```
 
-### Input JSON Schema
+6. **Report** the assignment table, the validator's warnings verbatim, and the
+   `sdkconfig` / `platformio.ini` lines that matter.
 
-Both scripts accept the same JSON input format:
+### Input schema
 
 ```json
 {
   "platform": "esp32",
   "variant": "esp32|esp32s2|esp32s3|esp32c3|esp32c6",
-  "module": "WROOM|WROVER",
+  "module": "WROOM | WROVER | ESP32-S3-WROOM-1-N16R8 | ...",
+  "psram": "none|quad|octal",
   "wifi_enabled": false,
   "pins": [
-    {
-      "gpio": 21,
-      "function": "I2C_SDA",
-      "protocol_bus": "i2c|spi|uart|pwm|adc|gpio|1wire",
-      "device": "BME280",
-      "direction": "input|output|inout",
-      "pull": "none|up|down|internal_up|internal_down|external_up|external_down",
-      "speed_hz": 100000,
-      "notes": "Optional notes"
-    }
+    {"gpio": 15, "function": "I2C_SDA", "protocol_bus": "i2c", "device": "GT911",
+     "direction": "inout", "pull": "external_up", "speed_hz": 400000, "notes": ""}
   ]
 }
 ```
 
-| Field | Required | Default | Description |
-|-------|----------|---------|-------------|
-| `platform` | No | `"esp32"` | Platform family |
-| `variant` | No | Inferred from `platform` | Chip variant |
-| `module` | No | `"WROOM"` | Module type (affects reserved pins) |
-| `wifi_enabled` | No | `false` | Enables ADC2/WiFi conflict checks |
-| `pins` | **Yes** | — | Array of pin assignments |
-| `pins[].gpio` | **Yes** | — | GPIO number (integer) |
-| `pins[].function` | No | `""` | Signal name (e.g., `I2C_SDA`, `SPI_MOSI`) |
-| `pins[].protocol_bus` | No | `""` | Protocol type for categorization |
-| `pins[].device` | No | `""` | Device name for wiring notes |
-| `pins[].direction` | No | `""` | Pin direction hint |
-| `pins[].pull` | No | `"none"` | Pull resistor configuration |
-| `pins[].speed_hz` | No | `0` | Bus clock speed in Hz |
-| `pins[].notes` | No | `""` | Free-text notes |
+`module` and `psram` are what make S2/S3 answers trustworthy: `psram` wins when
+given, otherwise the memory suffix of the module name decides (`N16R8` → octal,
+`N8R2` → quad, `N8` → none). With neither, the validator stays undecided and
+**warns** about the octal-PSRAM pins instead of silently approving them. Pass
+`wifi_enabled: true` only when Wi-Fi is actually used — it gates the ADC2 check.
+Validation and code generation cover esp32, esp32s2, esp32s3, esp32c3 and
+esp32c6; the remaining variants are reference-only.
 
-**Note:** Script validation and code generation support esp32, esp32s2, esp32s3, esp32c3, and esp32c6 variants. Reference documentation is available for additional variants (C2, C5, H2, P4) for advisory purposes, but these are not yet supported by the validation/generation scripts.
+## 4. What the validator catches
 
-### validate_pinmap.py
-Validates a JSON pin configuration against hardware constraints.
-```bash
-python scripts/validate_pinmap.py --format json < input.json
-```
+Errors: flash-pin use, in-package octal-PSRAM pins (GPIO35-37 on S3 R8/R16
+parts), pins absent from the silicon (GPIO22-25 on S2/S3, 24/28-31 on ESP32),
+pins not bonded out on the module (GPIO33/34 on WROOM-1), duplicate assignment,
+output on an input-only pin, ADC2 with Wi-Fi, total GPIO current over 200 mA.
 
-### generate_config.py
-Generates boilerplate initialization code for the selected framework.
-```bash
-python scripts/generate_config.py --format json --framework arduino|espidf < input.json
-```
+Warnings: strapping pins, UART0/USB-serial pins, 1.8 V SPICLK pins on "V"
+parts, missing external I2C/1-Wire pull-ups, more PWM pins than the variant has
+LEDC channels (8 on S2/S3, 16 on ESP32, 6 on C3/C6), current approaching the
+limit.
+
+A warning is not noise — repeat it to the user with the mitigation.
+
+## 5. Firmware standards
+
+- **Memory:** capability-based allocation (`MALLOC_CAP_DMA`, `MALLOC_CAP_SPIRAM`,
+  `MALLOC_CAP_INTERNAL`). ISRs and anything that runs with the cache disabled
+  must live in IRAM. Large framebuffers belong in PSRAM, DMA descriptors do not.
+- **Reliability:** interrupt handlers short and IRAM-safe, task watchdog on,
+  every `esp_err_t` handled (`ESP_ERROR_CHECK` or an explicit branch).
+- **C++:** RAII throughout, no raw `new`/`delete`, prefer static or pool
+  allocation in long-running firmware.
+- **ESP-IDF 5.x CLI:** `idf.py set-target esp32s3`, `menuconfig`, `build`,
+  `flash`, `monitor`, `size-components`, `erase-flash`. `set-target` wipes the
+  build directory and rewrites `sdkconfig`. Pin component versions in
+  `idf_component.yml`; `dependencies.lock` records what was resolved.
+- **PlatformIO:** one `[env:...]` per board in `platformio.ini`; switching
+  `framework = espidf|arduino` changes the whole API surface, so say which one
+  the generated code targets.

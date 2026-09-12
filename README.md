@@ -1,194 +1,155 @@
-# ESP32
+# ESP32 Agent Skills
 
-A Claude Code plugin for ESP32 embedded systems development. Provides expert-level chip selection, GPIO pin validation with anti-bricking safety checks, code generation for Arduino and ESP-IDF, and comprehensive reference documentation for LVGL and Waveshare hardware.
+Six agent skills for embedded work on the Espressif ESP32 family and the hardware
+around it. They run in **Claude Code** (as a plugin or as project/user skills) and
+in **Codex** (as `.agents/skills`), from the same files.
 
-## Installation
+| Skill | Covers |
+|---|---|
+| `esp32` | ESP-IDF 5.x / PlatformIO firmware, GPIO pin-map validation with anti-bricking checks, code generation, memory and PSRAM |
+| `lvgl` | LVGL 8.2-9.5 APIs, widgets, the v8→v9 migration, draw buffers, performance |
+| `display-panels` | display and touch controllers, bus choice (RGB/I80/SPI/QSPI/I2C), tearing and image-drift diagnosis, esp_lcd RGB configuration |
+| `hardware-boards` | board pinouts — Waveshare dev boards and display modules, plus the Pregmate MAIN A1 analyzer board |
+| `electronics` | wiring and electrical limits, pull-ups and level shifting, bus protocols, sensor/breakout pinouts |
+| `datasheets` | downloads vendor PDFs and splits them into per-section chunks with an index, so hardware claims can be cited |
 
-```bash
-claude /install-plugin https://github.com/ezrover/ESP32-AI-Agent-Skill
-```
+## Install
 
-Or install from a local clone:
-
-```bash
-git clone https://github.com/ezrover/ESP32-AI-Agent-Skill.git
-claude /install-plugin ./ESP32-AI-Agent-Skill
-```
-
-### Prerequisites
-
-- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI installed
-- Python 3.9+ (for validation and code generation scripts)
-
-## Overview
-
-Once installed, Claude automatically activates this plugin when you work on ESP32 projects. It loads hardware reference data on demand and uses validation scripts to prevent common mistakes that can damage hardware.
-
-**What it covers:**
-
-- **Chip selection** across 9 ESP32 variants (ESP32, S2, S3, C3, C6, C2, C5, H2, P4)
-- **GPIO validation** that catches strapping pin traps, ADC2/Wi-Fi conflicts, flash pin violations, and input-only pin misuse
-- **Code generation** for Arduino (`setup()`/`loop()`) and ESP-IDF (`app_main()`) with correct bus initialization
-- **LVGL references** for versions 8.2 through 9.5 with API docs, widget catalogs, and migration guides
-- **Waveshare board references** for 60+ dev boards and LCD displays with full pinout tables
-
-## Usage
-
-Ask Claude naturally about any ESP32 topic:
-
-```
-I need to wire a BME280 sensor and ST7789 display to an ESP32-S3 with WiFi
-```
-
-```
-Generate ESP-IDF initialization code for my pin assignments on ESP32-C6
-```
-
-```
-What changed between LVGL v8 and v9? Which version should I use with ESP32-S3?
-```
-
-```
-Show me the pinout for the Waveshare ESP32-S3 Touch LCD 4.3 inch board
-```
-
-Claude will load the relevant reference files, validate your configuration, and generate working code.
-
-### Validation Scripts
-
-The plugin includes Python scripts that Claude invokes during its workflow. You can also run them directly:
+**Claude Code, as a plugin:**
 
 ```bash
-# Validate a GPIO pin assignment
-echo '{"platform":"esp32s3","pins":[{"gpio":21,"function":"I2C_SDA","protocol_bus":"i2c"}]}' \
-  | python scripts/validate_pinmap.py
-
-# Generate Arduino boilerplate
-python scripts/generate_config.py input.json --framework arduino --format text
-
-# Generate ESP-IDF boilerplate
-python scripts/generate_config.py input.json --framework espidf --format text
+claude /install-plugin https://github.com/random1st/ESP32-AI-Agent-Skill
 ```
 
-### Input JSON Format
+**Claude Code, as project or user skills** — symlink (or copy) the skill
+directories into `.claude/skills/` or `~/.claude/skills/`:
 
-Both scripts accept the same JSON structure:
+```bash
+git clone https://github.com/random1st/ESP32-AI-Agent-Skill
+for s in esp32 lvgl display-panels hardware-boards electronics datasheets; do
+  ln -sfn "$PWD/ESP32-AI-Agent-Skill/skills/$s" ~/.claude/skills/$s
+done
+```
+
+**Codex** — the repo already carries `.agents/skills/<name>` links, so a clone
+works as-is inside a project; for global use:
+
+```bash
+for s in esp32 lvgl display-panels hardware-boards electronics datasheets; do
+  ln -sfn "$PWD/ESP32-AI-Agent-Skill/skills/$s" ~/.agents/skills/$s
+done
+```
+
+Each skill is self-contained: `SKILL.md` plus its own `references/`, and for
+`esp32`/`datasheets` also `scripts/` and `tests/`. Nothing resolves outside its
+own directory, which is what makes one tree work for both hosts.
+
+Prerequisites: Python 3.9+ for the scripts; `pdftotext` (poppler) or `pypdf` for
+the datasheet chunker.
+
+## Using the scripts
+
+```bash
+cd skills/esp32
+
+# Validate a pin map (exit 0 valid, 1 errors, 2 bad input)
+python scripts/validate_pinmap.py --format text pinmap.json
+
+# Real-board example shipped with the repo
+python scripts/validate_pinmap.py --format text tests/fixtures/board_pregmate_main_a1.json
+
+# Generate init code
+python scripts/generate_config.py pinmap.json --framework espidf   # or arduino
+
+# Regression suite (69 tests)
+python -m pytest -q
+```
+
+Input format:
 
 ```json
 {
-  "platform": "esp32s3",
-  "module": "WROOM",
-  "wifi_enabled": true,
+  "platform": "esp32",
+  "variant": "esp32s3",
+  "module": "ESP32-S3-WROOM-1-N16R8",
+  "psram": "octal",
+  "wifi_enabled": false,
   "pins": [
-    {
-      "gpio": 21,
-      "function": "I2C_SDA",
-      "protocol_bus": "i2c",
-      "device": "BME280",
-      "pull": "external_up"
-    },
-    {
-      "gpio": 22,
-      "function": "I2C_SCL",
-      "protocol_bus": "i2c",
-      "device": "BME280",
-      "pull": "external_up"
-    }
+    {"gpio": 15, "function": "I2C_SDA", "protocol_bus": "i2c", "device": "GT911",
+     "direction": "inout", "pull": "external_up", "speed_hz": 400000}
   ]
 }
 ```
 
-## Supported Variants
+`module` and `psram` are what make S2/S3 answers correct. `psram` wins when given;
+otherwise the module's memory suffix decides (`N16R8` → octal, `N8R2` → quad,
+`N8` → none). With neither, the validator stays undecided and warns about the
+octal-PSRAM pins instead of silently approving them.
 
-| Variant | Validation | Code Gen | Reference Docs | Best For |
+## Datasheet corpus
+
+```bash
+cd skills/datasheets
+python scripts/fetch_datasheets.py --list
+python scripts/fetch_datasheets.py esp32-s3            # chip datasheet
+python scripts/fetch_datasheets.py --depth 3 esp32-s3-trm
+```
+
+Sectioning follows the PDF outline when the document has one (ESP32-S3 datasheet
+→ 66 chunks, the TRM → 463), falling back to a numbered-heading heuristic.
+Every chunk carries front matter naming the source URL, document, section and PDF
+pages; `INDEX.md` maps sections to chunk files. PDFs are never committed, and
+chunks whose `redistribute:` flag is false stay local.
+
+## Supported variants
+
+| Variant | Validation | Code gen | Reference docs | Best for |
 |---------|:----------:|:--------:|:--------------:|----------|
 | ESP32   | Yes | Yes | Yes | Bluetooth Classic, legacy projects |
 | ESP32-S2 | Yes | Yes | Yes | Ultra-low power, USB OTG/HID |
 | ESP32-S3 | Yes | Yes | Yes | AI/ML, complex GUIs, cameras |
 | ESP32-C3 | Yes | Yes | Yes | Budget IoT nodes (RISC-V) |
 | ESP32-C6 | Yes | Yes | Yes | Wi-Fi 6, Matter/Thread, Zigbee |
-| ESP32-C2 | - | - | Yes | Ultra-low-cost WiFi/BLE |
-| ESP32-C5 | - | - | Yes | Wi-Fi 6 dual-band |
-| ESP32-H2 | - | - | Yes | Zigbee/Thread hub (no WiFi) |
-| ESP32-P4 | - | - | Yes | Multimedia, H.264, dual MIPI |
+| ESP32-C2, C5, H2, P4 | - | - | Yes | reference only |
 
-## Safety Checks
+## Safety checks
 
-The plugin actively prevents these common hardware mistakes:
+Chip-gated, because the classic ESP32 rules are wrong on newer variants:
 
-| Check | What It Catches |
-|-------|----------------|
-| **GPIO12 Flash Voltage Trap** | Pulling GPIO12 HIGH at boot sets flash to 1.8V, potentially bricking 3.3V modules |
-| **ADC2/WiFi Conflict** | ADC2 pins are unavailable when WiFi is active on ESP32/S2/S3 |
-| **Flash Pin Protection** | Blocks assignment of GPIO6-11 (ESP32), GPIO12-17 (C3), GPIO24-29 (C6), GPIO26-32 (S2/S3) |
-| **Input-Only Pins** | Rejects output assignments to GPIO34-39 (ESP32) or GPIO46 (S2/S3) |
-| **PSRAM Conflicts** | Blocks GPIO16-17 on WROVER modules |
-| **Non-Exposed Pins** | Rejects pins not physically bonded on the module (GPIO20, 24, 28-31, 37, 38 on WROOM) |
-| **Current Budget** | Warns when estimated GPIO current approaches the 200mA limit |
+| Check | What it catches |
+|---|---|
+| **Flash pins** | GPIO6-11 (ESP32), 12-17 (C3), 24-29 (C6), 26-32 (S2/S3) |
+| **Octal PSRAM pins** | GPIO35/36/37 on ESP32-S3 R8/R16 parts — a boot failure, not a warning |
+| **Non-existent GPIOs** | GPIO22-25 on S2/S3, GPIO24/28-31 on ESP32 |
+| **Pins absent on the module** | GPIO33/34 on ESP32-S3-WROOM-1/1U, GPIO20/24/28-31/37/38 on WROOM-32 |
+| **Input-only pins** | GPIO34-39 on ESP32, GPIO46 on S2 — and explicitly *not* on S3, which has none |
+| **VDD_SPI strapping** | GPIO12 (ESP32) / GPIO45 (S2/S3) high at boot selects 1.8 V and can destroy 3.3 V memory |
+| **1.8 V SPI clock pins** | GPIO47/48 on "V" parts swing 1.8 V while the rest of the IO stays 3.3 V |
+| **ADC2 vs Wi-Fi** | ADC2 readings are invalid while Wi-Fi runs (ESP32/S2/S3) |
+| **LEDC channel count** | 8 channels on S2/S3, 16 on ESP32, 6 on C3/C6 |
+| **Current budget** | warns as the estimated GPIO current approaches 200 mA |
 
-## Reference Documentation
+The pin model is pinned to ESP-IDF v5.5.1 `soc_caps.h` masks and the vendor
+datasheets, with the regression tests citing the exact source for each claim.
 
-The plugin includes structured reference docs that Claude loads on demand:
+## Reference documentation
 
-### ESP32 Hardware
-- Per-variant GPIO pin databases with usability ratings
-- Strapping pin behavior and boot mode implications
-- Protocol quick reference (I2C, SPI, UART, PWM, 1-Wire, ADC, DAC)
-- Electrical constraints (voltage levels, current limits, pull-up requirements)
+- **ESP32 hardware** — per-variant pin databases, strapping behaviour, ESP32-S3
+  deep dives for IO MUX/GPIO and the flash/PSRAM bus.
+- **LVGL 8.2-9.5** — per-version API references, widget catalogues, the v8→v9
+  migration with its renamed functions, ESP32 integration.
+- **Boards** — Waveshare dev boards, LCD/e-paper/round display modules, and a
+  complete profile for the Pregmate MAIN A1 (ESP32-S3 + ST7701S + GT911 + TCA9554)
+  with a machine-readable pin map used as a test fixture.
+- **Electronics** — electrical constraints, protocol quick reference, common
+  device pinouts.
 
-### LVGL (v8.2 - v9.5)
-- Per-version API references with function signatures
-- Complete widget catalogs (32+ widgets in v8, 37 in v9.5)
-- v8-to-v9 migration guide with 100+ renamed functions
-- ESP32 integration guide with SPI display, I2C touch, PSRAM, and FreeRTOS setup
+## Credits
 
-### Waveshare
-- 60+ ESP32 dev board specs with GPIO pinout tables
-- LCD display modules (SPI, I2C, parallel, round, e-paper)
-- Display controller ICs (ST7789, ILI9341, GC9A01, etc.)
-- Touch controller ICs (CST816S, GT911, FT6336, XPT2046)
-
-## Plugin Structure
-
-```
-ESP32-AI-Agent-Skill/
-├── .claude-plugin/
-│   └── plugin.json           # Plugin metadata
-├── skills/
-│   └── esp32/
-│       └── SKILL.md          # Main skill (auto-activates on ESP32 topics)
-├── references/               # Loaded on demand by the skill
-│   ├── platforms/            # GPIO databases, pin specifics
-│   ├── esp32*/               # Per-variant spec sheets
-│   ├── lvgl/                 # LVGL v8.2-v9.5
-│   └── waveshare/            # Waveshare boards and displays
-├── scripts/                  # Validation and code generation
-│   ├── validate_pinmap.py
-│   ├── generate_config.py
-│   └── platforms/
-└── tests/                    # 50 automated tests
-```
-
-## Testing
-
-```bash
-pip install pytest
-python3 -m pytest tests/ -v
-```
-
-## Contributing
-
-Contributions welcome. To extend the reference documentation:
-
-- **New ESP32 variant**: Add `references/esp32-XX/specs.md`
-- **New LVGL version**: Add `references/lvgl/vX.Y/README.md` and `api-reference.md`
-- **New Waveshare board**: Add to the appropriate file in `references/waveshare/dev-boards/`
-- **New display/touch controller**: Add to `references/waveshare/common/`
-
-## Author
-
-[ezrover](https://github.com/ezrover)
+Fork of [ezrover/ESP32-AI-Agent-Skill](https://github.com/ezrover/ESP32-AI-Agent-Skill),
+restructured into per-subject skills with a corrected ESP32-S3 model, Codex
+support, a datasheet corpus and board profiles.
 
 ## License
 
-MIT
+See `LICENSE`.

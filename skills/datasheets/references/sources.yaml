@@ -1,0 +1,81 @@
+# Datasheet catalog for scripts/fetch_datasheets.py.
+#
+# Vendor PDFs are NOT committed to this repo — several are explicitly marked
+# confidential or non-redistributable (ST7701S says "Sitronix Confidential").
+# The fetcher downloads them into references/datasheets/<slug>/ (gitignored),
+# converts each to text, and splits it into one markdown chunk per section so
+# an agent can grep a topic instead of loading a 300-page document.
+#
+# Fields:
+#   slug        directory name under references/datasheets/
+#   title       human-readable name used in the generated index
+#   url         direct PDF link
+#   vendor      copyright holder
+#   redistribute  false -> never commit the generated chunks
+#   chunk_by    "toc-heading" (split on detected numbered headings) or
+#               "pages:<N>" (fixed N-page chunks, for scanned/flat documents)
+#   topics      hints the agent matches against when picking a chunk
+
+datasheets:
+  - slug: esp32-s3
+    title: ESP32-S3 Series Datasheet
+    url: https://www.espressif.com/sites/default/files/documentation/esp32-s3_datasheet_en.pdf
+    vendor: Espressif Systems
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [pin definitions, io mux, strapping pins, electrical characteristics,
+             absolute maximum ratings, rf, power consumption, package, ordering]
+
+  - slug: esp32-s3-trm
+    title: ESP32-S3 Technical Reference Manual
+    url: https://www.espressif.com/sites/default/files/documentation/esp32-s3_technical_reference_manual_en.pdf
+    vendor: Espressif Systems
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [gpio matrix, io mux, lcd_cam, spi, i2c, ledc, psram, cache, mmu,
+             interrupt matrix, rtc, system registers]
+
+  - slug: esp32-s3-wroom-1
+    title: ESP32-S3-WROOM-1 / 1U Module Datasheet
+    url: https://www.espressif.com/sites/default/files/documentation/esp32-s3-wroom-1_wroom-1u_datasheet_en.pdf
+    vendor: Espressif Systems
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [module variants, n16r8, octal psram, pin assignment, antenna,
+             recommended schematic, reflow profile]
+
+  - slug: st7701s
+    title: ST7701S TFT Driver (480RGB x 864) Datasheet
+    url: https://focuslcds.com/wp-content/uploads/Drivers/ST7701S.pdf
+    vendor: Sitronix Technology
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [rgb interface, de mode, hv mode, command table, power sequence,
+             gamma, 3-wire spi, sleep in, sleep out, porch]
+
+  - slug: gt911
+    title: GT911 5-Point Capacitive Touch Controller Datasheet
+    url: https://w2.electrodragon.com/Chip-dat/goodix-dat/GT911-dat/GT911-DS.pdf
+    vendor: Goodix
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [i2c communication, slave address, int pin, reset sequence,
+             green mode, sensor design]
+
+  - slug: gt911-programming
+    title: GT911 Programming Guide (register map)
+    url: https://www.orientdisplay.com/pdf/GT911.pdf
+    vendor: Goodix
+    redistribute: false
+    chunk_by: toc-heading
+    topics: [register map, config registers, 0x8047, coordinate registers,
+             0x814e, config checksum, product id, firmware version]
+
+  - slug: tca9554
+    title: TCA9554 8-bit I2C I/O Expander Datasheet
+    url: https://www.ti.com/lit/ds/symlink/tca9554.pdf
+    vendor: Texas Instruments
+    redistribute: true
+    chunk_by: toc-heading
+    topics: [i2c address, configuration register, output port register,
+             polarity inversion, interrupt, power-on defaults]
