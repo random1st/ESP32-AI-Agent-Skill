@@ -64,3 +64,5 @@ references/.DS_Store
 **/.DS_Store
 
 .3way-review-shared.txt
+__pycache__/
+.pytest_cache/

@@ -1,0 +1,12 @@
+# Vendor PDFs are never committed.
+**/*.pdf
+
+# The TRM expands to ~6 MB of text; INDEX.md is the committed map and the chunks
+# are rebuilt on demand with scripts/fetch_datasheets.py esp32-s3-trm
+esp32-s3-trm/[0-9]*.md
+
+# Documents whose licence forbids redistribution (see sources.yaml):
+# ST7701S is marked "Sitronix Confidential"; the GT911 docs are third-party mirrors.
+st7701s/[0-9]*.md
+gt911/[0-9]*.md
+gt911-programming/[0-9]*.md
