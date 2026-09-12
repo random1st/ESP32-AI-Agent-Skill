@@ -3,7 +3,7 @@
 Sources: ESP32-S3 Series Datasheet §2.3.5, §2.5 (Power Supply), §4.1.2 (Memory
 Organization); ESP32-S3-WROOM-1/1U Datasheet §1.2 (Series Comparison), §3.2
 (Pin Description), §6.5 (Memory Specifications); ESP-IDF v5.5.1 ESP32-S3 GPIO
-reference and `esp_psram` Kconfig. Full text: `esp32-datasheets` skill.
+reference and `esp_psram` Kconfig. Full text: `datasheets` skill.
 
 ## 1. Which pins the memory bus takes
 

@@ -2,7 +2,7 @@
 
 Deep dives: `gpio-iomux.md` (pins, straps, drive, IO MUX),
 `memory-bus.md` (flash/PSRAM bus, modules, XIP). Full datasheet text is
-available through the `esp32-datasheets` skill.
+available through the `datasheets` skill.
 
 ## 1. Core Architecture
 - **CPU:** Dual-core Xtensa® LX7, 240 MHz.

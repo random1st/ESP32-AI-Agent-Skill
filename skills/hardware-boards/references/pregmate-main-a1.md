@@ -15,7 +15,7 @@ out of — pin numbers are shared, the differences are called out below.
 | ESP-IDF | 5.5.1 | `dependencies.lock` |
 | LVGL | 8.3.11 (registry component `lvgl/lvgl`) | `dependencies.lock` |
 | Display | ST7701S, 480×640, RGB565, 16-bit parallel, PCLK 30 MHz | `ST7701S.h` |
-| Frame buffers | 2 × 480×640×2 B = 1.17 MB in PSRAM | `CONFIG_EXAMPLE_DOUBLE_FB` |
+| Frame buffers | 2 × 480×640×2 B = 1 228 800 B (1.17 MiB) in PSRAM | `CONFIG_EXAMPLE_DOUBLE_FB` |
 | Touch | GT911 on I2C0 @ 400 kHz, address 0x5D | `GT911.h`, `I2C_Driver.h` |
 | Expander | TCA9554 on the same I2C0 bus | `EXIO/TCA9554PWR.h` |
 | Radio | BLE only, NimBLE peripheral, MTU 512, 1 bond | `sdkconfig.defaults` |
@@ -26,11 +26,13 @@ validate with `"wifi_enabled": false`.
 
 ## 2. Pin map
 
-The machine-readable copy lives in
-`tests/fixtures/board_pregmate_main_a1.json` and is asserted by
-`tests/test_esp32s3_memory_bus.py::TestPregmateBoardFixture`. Validate it with:
+The machine-readable copy lives in the `esp32` skill, at
+`tests/fixtures/board_pregmate_main_a1.json`, and is asserted by
+`tests/test_esp32s3_memory_bus.py::TestPregmateBoardFixture`. Validate it from
+that skill's directory:
 
 ```bash
+cd ../esp32          # or .agents/skills/esp32 from the firmware repo root
 python scripts/validate_pinmap.py --format text \
   tests/fixtures/board_pregmate_main_a1.json
 ```
@@ -83,15 +85,22 @@ slots fit — the mismatch is latent rather than breaking, but regenerate
 
 ## 4. RGB bandwidth budget
 
-480 × 640 × 16 bpp at 30 MHz PCLK is 60 MB/s of PSRAM reads for the scan-out
-alone, against a frame rate of 30 MHz / (480 × 640) ≈ 97 Hz worth of pixel clock
-(the panel's real refresh depends on the porch settings in `ST7701S.c`). With
-two full frame buffers in octal PSRAM at 80 MHz, the headroom is adequate but
-not generous: this is why `CONFIG_SPIRAM_FETCH_INSTRUCTIONS`,
-`CONFIG_SPIRAM_RODATA`, `CONFIG_LCD_RGB_ISR_IRAM_SAFE` and
-`CONFIG_LCD_RGB_RESTART_IN_VSYNC` are all enabled — see
-`references/esp32-s3/rgb-lcd.md` for what each one buys and what breaks without
-it.
+At 30 MHz PCLK the peripheral consumes one pixel per clock, so the scan-out
+reads ~60 MB/s from PSRAM while active pixels are being shifted out. The frame
+rate is 30 MHz divided by the *total* line and frame counts — active pixels plus
+the porches configured in `ST7701S.c` — so it lands below the 97.7 Hz that
+480 × 640 active pixels alone would imply; read the real porch values before
+quoting a refresh rate.
+
+Whether that fits is not something this profile can assert from the config
+alone: it depends on how much of the octal-PSRAM bandwidth the CPU takes at the
+same time. What the configuration does do is remove the known starvation
+triggers — `CONFIG_SPIRAM_FETCH_INSTRUCTIONS` + `CONFIG_SPIRAM_RODATA` (XIP from
+PSRAM, so a flash write does not stall the scan-out),
+`CONFIG_LCD_RGB_ISR_IRAM_SAFE`, and `CONFIG_LCD_RGB_RESTART_IN_VSYNC` (recovers
+from an underrun instead of leaving a permanently shifted image). The
+`display-panels` skill's `references/rgb-lcd.md` says what each one buys and
+what breaks without it; measure under a flash write before claiming headroom.
 
 ## 5. When touching this board
 

@@ -3,7 +3,7 @@
 Sources: ESP32-S3 Series Datasheet §2 (Pins), §5 (Electrical Characteristics);
 ESP32-S3-WROOM-1/1U Datasheet §3.2 (Pin Description);
 ESP-IDF v5.5.1 `components/soc/esp32s3/include/soc/soc_caps.h` and the
-ESP32-S3 GPIO API reference. Full text: `esp32-datasheets` skill.
+ESP32-S3 GPIO API reference. Full text: `datasheets` skill.
 
 ## 1. What exists
 
@@ -50,10 +50,12 @@ requirement whenever you assign one.
 | GPIO26-32 | VDD_SPI | flash/PSRAM rail; 1.8 V on "V" parts |
 | GPIO33-37 | VDD_SPI **or** VDD3P3_CPU | selected by eFuse `EFUSE_PIN_POWER_SELECTION` |
 | GPIO38-48 | VDD3P3_CPU | 3.3 V |
-| GPIO47, GPIO48 | VDD_SPI (SPICLK_N/P) | **1.8 V on ESP32-S3R8V / R16V parts** while every other GPIO stays 3.3 V (WROOM-1 datasheet footnote c) |
+| GPIO47, GPIO48 | VDD_SPI (SPICLK_N/P) | **1.8 V on ESP32-S3R8V / R16V parts** (chip datasheet §2.2 note 4; WROOM-1 footnote c names R16V), while the VDD3P3_* GPIOs stay at 3.3 V |
 
-That last row bites boards that use GPIO47/48 as general IO or display data:
-the levels differ from the rest of the bus on 1.8 V parts.
+That last row bites boards that use GPIO47/48 as general IO or display data: on
+a 1.8 V part those two pins swing 1.8 V while the GPIO0-21 and GPIO38-46 pins
+around them stay at 3.3 V. GPIO26-37 sit on VDD_SPI too, so they follow the same
+1.8 V rail — they are simply not available for application use on such a module.
 
 ## 4. DC limits (3.3 V, 25 °C — datasheet §5.4)
 
@@ -85,4 +87,4 @@ with two exceptions worth stating to the user:
 
 Per-pin alternate functions and the peripheral signal list live in the
 datasheet chunk `2.3.1 IO MUX Functions` and TRM chapter 6 (IO MUX and GPIO
-Matrix) — both available through the `esp32-datasheets` skill.
+Matrix) — both available through the `datasheets` skill.

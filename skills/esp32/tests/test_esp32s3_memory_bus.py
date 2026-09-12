@@ -224,3 +224,52 @@ class TestPregmateBoardFixture:
         result = platform.validate(data)
         warned = {w["gpio"] for w in result.warnings}
         assert warned == {3, 45, 46}, result.warnings
+
+class TestCallConsistency:
+    """Regression: one validate() call must not mix two module configurations."""
+
+    def test_assignment_module_overrides_constructor_for_non_exposed(self):
+        # Built for a bare chip, validated as a WROOM-1: GPIO33 must be rejected.
+        platform = get_platform("esp32", variant="esp32s3", module="ESP32-S3R8",
+                                psram="octal")
+        result = platform.validate(_assignment(
+            [{"gpio": 33, "function": "SENSOR_EN", "direction": "output"}],
+            module="ESP32-S3-WROOM-1-N16R8",
+        ))
+        assert not result.valid
+        assert ConflictType.RESERVED_PIN.value in _codes(result.errors)
+        assert "ESP32-S3-WROOM-1-N16R8" in result.errors[0]["message"]
+
+    def test_assignment_module_overrides_constructor_for_1v8_pins(self):
+        platform = get_platform("esp32", variant="esp32s3",
+                                module="ESP32-S3-WROOM-1-N16R8")
+        result = platform.validate(_assignment(
+            [{"gpio": 47, "function": "RGB_B3", "direction": "output"}],
+            module="ESP32-S3-WROOM-1-N16R16V",
+        ))
+        messages = " ".join(w["message"] for w in result.warnings)
+        assert "1.8 V" in messages
+        assert "N16R16V" in messages
+
+    def test_octal_flash_also_claims_spiio4_5(self):
+        """An octal flash takes the whole GPIO33-37 group, not just 35-37."""
+        platform = get_platform("esp32", variant="esp32s3", module="ESP32-S3R8")
+        for gpio in (33, 34, 35, 36, 37):
+            result = platform.validate(_assignment(
+                [{"gpio": gpio, "function": "SENSOR_EN", "direction": "output"}],
+                module="ESP32-S3R8", flash="octal",
+            ))
+            assert not result.valid, f"GPIO{gpio} must be rejected with an octal flash"
+            assert ConflictType.PSRAM_PIN.value in _codes(result.errors)
+
+    def test_standalone_memory_suffix_resolves(self):
+        assert get_platform("esp32", variant="esp32s3", module="N8").psram == "none"
+        assert get_platform("esp32", variant="esp32s3", module="N16R8").psram == "octal"
+
+    def test_non_finite_gpio_is_rejected_not_crashed(self):
+        platform = get_platform("esp32", variant="esp32s3")
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            result = platform.validate(_assignment(
+                [{"gpio": bad, "function": "LED", "direction": "output"}]))
+            assert not result.valid
+            assert ConflictType.INVALID_GPIO.value in _codes(result.errors)

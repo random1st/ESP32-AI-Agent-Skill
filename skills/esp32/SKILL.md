@@ -83,6 +83,7 @@ python scripts/generate_config.py --framework espidf pinmap.json   # or --framew
   "variant": "esp32|esp32s2|esp32s3|esp32c3|esp32c6",
   "module": "WROOM | WROVER | ESP32-S3-WROOM-1-N16R8 | ...",
   "psram": "none|quad|octal",
+  "flash": "quad|octal",
   "wifi_enabled": false,
   "pins": [
     {"gpio": 15, "function": "I2C_SDA", "protocol_bus": "i2c", "device": "GT911",
@@ -96,6 +97,8 @@ given, otherwise the memory suffix of the module name decides (`N16R8` → octal
 `N8R2` → quad, `N8` → none). With neither, the validator stays undecided and
 **warns** about the octal-PSRAM pins instead of silently approving them. Pass
 `wifi_enabled: true` only when Wi-Fi is actually used — it gates the ADC2 check.
+`flash` is optional and quad unless stated; `"octal"` extends the reserved set to
+all of GPIO33-37, since an octal flash drives SPIIO4/SPIIO5 as well.
 Validation and code generation cover esp32, esp32s2, esp32s3, esp32c3 and
 esp32c6; the remaining variants are reference-only.
 

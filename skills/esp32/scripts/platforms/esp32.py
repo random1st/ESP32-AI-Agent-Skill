@@ -245,7 +245,7 @@ class Esp32Platform(Platform):
             return "octal"
         if re.search(r"R2(V|\b)", name):
             return "quad"
-        if re.search(r"-N\d+$", name):
+        if re.search(r"(?:^|-)N\d+$", name):
             return "none"
         if self.variant == "esp32":
             # WROVER carries quad PSRAM on GPIO16/17; plain WROOM has none.
@@ -297,9 +297,15 @@ class Esp32Platform(Platform):
         """True when the octal pins may or may not be in use (module unknown)."""
         return bool(self._get_octal_psram_pins()) and self.psram == "unknown"
 
-    def _low_voltage_spi_clk_pins(self) -> Set[int]:
-        """SPICLK_N/P pins that run at 1.8 V on "V" (1.8 V VDD_SPI) parts."""
-        if "V" not in _module_memory_suffix(self.module):
+    def _low_voltage_spi_clk_pins(self, module: Optional[str] = None) -> Set[int]:
+        """SPICLK_N/P pins that run at 1.8 V on "V" (1.8 V VDD_SPI) parts.
+
+        ``module`` lets a single validate() call stay self-consistent when the
+        assignment names a different module than the one this platform was built
+        with; it defaults to the constructor value.
+        """
+        name = self.module if module is None else module
+        if "V" not in _module_memory_suffix(name):
             return set()
         return _LOW_VOLTAGE_SPI_CLK_PINS.get(self.variant, set())
 
@@ -315,13 +321,17 @@ class Esp32Platform(Platform):
         """Get the number of GPIOs for the current variant."""
         return _GPIO_COUNT.get(self.variant, 40)
 
-    def _get_non_exposed_pins(self) -> Set[int]:
-        """Pins the current module does not bring out to a pad."""
+    def _get_non_exposed_pins(self, module: Optional[str] = None) -> Set[int]:
+        """Pins the given module does not bring out to a pad.
+
+        ``module`` defaults to the constructor value; validate() passes the
+        module named in the assignment so one call never mixes two boards.
+        """
+        name = self.module if module is None else module
         if self.variant == "esp32":
-            return _NON_EXPOSED_PINS.get(self.module or "WROOM", set())
+            return _NON_EXPOSED_PINS.get(name or "WROOM", set())
         if self.variant == "esp32s3":
-            name = str(self.module or "").upper()
-            if "WROOM-1" in name:
+            if "WROOM-1" in str(name or "").upper():
                 return _NON_EXPOSED_PINS_S3["WROOM-1"]
         return set()
 
@@ -781,11 +791,18 @@ class Esp32Platform(Platform):
         # Memory bus mode: explicit "psram" field wins, else parse the module
         # suffix. Octal flash/PSRAM claims five extra pins on ESP32-S3.
         psram_mode = self._resolve_psram_mode(module or "", assignment.get("psram"))
+        flash_mode = str(assignment.get("flash") or "").strip().lower()
         octal_psram_pins = self._get_octal_psram_pins()
         octal_flash_pins = self._get_octal_flash_pins()
-        octal_reserved = bool(octal_psram_pins) and psram_mode == "octal"
+        # An octal flash drives the same bus: it claims SPIIO4..SPIIO7 and
+        # SPIDQS, so every one of GPIO33-37 becomes unavailable.
+        if flash_mode == "octal":
+            octal_psram_pins = octal_psram_pins | octal_flash_pins
+            octal_flash_pins = set()
+        octal_reserved = bool(octal_psram_pins) and (
+            psram_mode == "octal" or flash_mode == "octal")
         octal_uncertain = bool(octal_psram_pins) and psram_mode == "unknown"
-        low_voltage_clk_pins = self._low_voltage_spi_clk_pins()
+        low_voltage_clk_pins = self._low_voltage_spi_clk_pins(module)
 
         # Track seen GPIOs for conflict detection: gpio -> (function, protocol_bus)
         seen_gpios = {}  # type: Dict[int, tuple]
@@ -795,7 +812,7 @@ class Esp32Platform(Platform):
         input_only_pins = self._get_input_only_pins()
         psram_pins = self._get_psram_pins()
         adc2_gpios = self._get_adc2_gpios()
-        non_exposed = self._get_non_exposed_pins()
+        non_exposed = self._get_non_exposed_pins(module)
         nonexistent = self._get_nonexistent_pins()
         strapping_pin_set = self._get_strapping_pin_set()
         strapping_msgs = self._get_strapping_pins()
@@ -829,8 +846,11 @@ class Esp32Platform(Platform):
                     "severity": "error"
                 })
                 continue
-            # Reject floats with fractional parts
-            if isinstance(raw_gpio, float) and raw_gpio != int(raw_gpio):
+            # Reject floats with fractional parts, and NaN/inf before int()
+            if isinstance(raw_gpio, float) and (
+                    raw_gpio != raw_gpio                      # NaN
+                    or raw_gpio in (float("inf"), float("-inf"))
+                    or raw_gpio != int(raw_gpio)):
                 errors.append({
                     "gpio": -1,
                     "code": ConflictType.INVALID_GPIO.value,
@@ -877,7 +897,7 @@ class Esp32Platform(Platform):
                 errors.append({
                     "gpio": gpio,
                     "code": ConflictType.RESERVED_PIN.value,
-                    "message": f"GPIO{gpio} is not exposed on {self.module} module "
+                    "message": f"GPIO{gpio} is not exposed on {module} module "
                                f"and cannot be physically wired.",
                     "severity": "error"
                 })
@@ -1042,7 +1062,7 @@ class Esp32Platform(Platform):
                     "gpio": gpio,
                     "code": ConflictType.ELECTRICAL_VOLTAGE.value,
                     "message": f"GPIO{gpio} (SPICLK_N/SPICLK_P) runs at 1.8 V on "
-                               f"{self.module} because VDD_SPI is 1.8 V on \"V\" parts, "
+                               f"{module} because VDD_SPI is 1.8 V on \"V\" parts, "
                                f"while the other GPIOs stay at 3.3 V. Check the level "
                                f"compatibility of whatever is wired here.",
                     "severity": "warning"
